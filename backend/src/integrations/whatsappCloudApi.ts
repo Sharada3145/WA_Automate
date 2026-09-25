@@ -26,23 +26,24 @@ export class WhatsAppCloudApi {
     });
   }
 
-  async sendMessage(payload: WhatsAppMessagePayload): Promise<any> {
-    const url = `/${env.whatsappBusinessId}/messages`;
+  async sendMessage(payload: WhatsAppMessagePayload, phoneNumberId: string): Promise<any> {
+    const url = `/${phoneNumberId}/messages`;
     const response = await this.client.post(url, payload);
     return response.data;
+
   }
 
-  async sendText(to: string, body: string, fromPhoneId: string): Promise<any> {
+  async sendText(to: string, body: string, phoneNumberId: string): Promise<any> {
     const payload: WhatsAppMessagePayload = {
       messaging_product: 'whatsapp',
       to,
       type: 'text',
       text: { body },
     };
-    return this.sendMessage(payload);
+    return this.sendMessage(payload, phoneNumberId);
   }
 
-  async sendTemplate(to: string, templateName: string, languageCode: string, components: any[], fromPhoneId: string): Promise<any> {
+  async sendTemplate(to: string, templateName: string, languageCode: string, components: any[], phoneNumberId: string): Promise<any> {
     const payload: WhatsAppMessagePayload = {
       messaging_product: 'whatsapp',
       to,
@@ -53,10 +54,10 @@ export class WhatsAppCloudApi {
         components,
       },
     };
-    return this.sendMessage(payload);
+    return this.sendMessage(payload, phoneNumberId);
   }
 
-  async sendMedia(to: string, mediaId: string, type: 'image' | 'video' | 'document', caption?: string, fromPhoneId?: string): Promise<any> {
+  async sendMedia(to: string, mediaId: string, type: 'image' | 'video' | 'document', caption?: string, phoneNumberId?: string): Promise<any> {
     const mediaPayload: any = { id: mediaId };
     if (caption) mediaPayload.caption = caption;
     const payload: WhatsAppMessagePayload = {
@@ -65,7 +66,7 @@ export class WhatsAppCloudApi {
       type,
       [type]: mediaPayload,
     };
-    return this.sendMessage(payload);
+    return this.sendMessage(payload, phoneNumberId!);
   }
 }
 
