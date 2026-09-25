@@ -42,8 +42,8 @@ app.use(auditLogger);
 app.use(morgan('dev'));
 
 // Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', env: env.nodeEnv });
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok' });
 });
 
 // Unauthenticated routes
