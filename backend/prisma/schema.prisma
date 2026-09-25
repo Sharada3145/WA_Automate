@@ -1,0 +1,263 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                Int       @id @default(autoincrement())
+  email             String    @unique
+  password          String
+  name              String?
+  role              String    @default("admin")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  contacts          Contact[]
+  campaigns         Campaign[]
+  auditLogs         AuditLog[]
+  whatsappNumbers   WhatsAppPhoneNumber[]
+  contactImports    ContactImport[]
+  businessAccounts  WhatsAppBusinessAccount[]
+}
+
+model Contact {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  firstName     String?
+  lastName      String?
+  phoneNumber   String   @unique // normalized international format
+  email         String?
+  city          String?
+  consentGiven  Boolean  @default(false)
+  optOut        Boolean  @default(false)
+  optOutReason  String?  // reason for opting out
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user               User        @relation(fields: [userId], references: [id])
+  imports            ContactImport[] // optional import batches
+  suppression        SuppressionList?
+  campaignContacts   CampaignContact[]
+  incomingMessages   IncomingMessage[]
+  messages           Message[]
+}
+
+model ContactImport {
+  id             Int    @id @default(autoincrement())
+  userId         Int
+  sourceType     String // "csv", "xlsx", "google_sheet"
+  sourcePath     String? // path or sheet ID
+  importedAt     DateTime @default(now())
+  totalRows      Int
+  successfulRows Int
+  failedRows     Int
+
+  user           User @relation(fields: [userId], references: [id])
+  contacts       Contact[] // optional relation to contacts imported in this batch
+}
+
+model SuppressionList {
+  id          Int      @id @default(autoincrement())
+  contactId   Int      @unique
+  reason      String
+  createdAt   DateTime @default(now())
+
+  contact     Contact @relation(fields: [contactId], references: [id])
+}
+
+model WhatsAppBusinessAccount {
+  id                Int      @id @default(autoincrement())
+  userId            Int      // owning user
+  accountId         String   @unique // WhatsApp Business Account ID from Meta
+  name              String?
+  accessToken       String?  // encrypted Meta access token (never exposed to frontend)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User @relation(fields: [userId], references: [id])
+  phoneNumbers      WhatsAppPhoneNumber[]
+}
+
+model WhatsAppPhoneNumber {
+  id                     Int      @id @default(autoincrement())
+  businessAccountId      Int
+  userId                 Int? // optional link to the owning user
+  phoneNumberId          String?  @unique // Meta's phone number ID (used in API calls)
+  phoneNumber            String   @unique // E.164 format
+  displayName            String?
+  qualityRating          String?  // GREEN, YELLOW, RED
+  status                 String   @default("unconnected") // connected, unconnected, error
+  messagingLimit         String?  // TIER_1K, TIER_10K, TIER_100K, UNLIMITED
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  businessAccount        WhatsAppBusinessAccount @relation(fields: [businessAccountId], references: [id])
+  user                   User? @relation(fields: [userId], references: [id])
+  campaigns              Campaign[]
+  messages               Message[]
+  incomingMessages       IncomingMessage[]
+}
+
+model Template {
+  id                Int      @id @default(autoincrement())
+  wabaId            String?  // WhatsApp Business Account ID this template belongs to
+  metaTemplateId    String?  // Meta's template ID if synced
+  name              String
+  language          String
+  category          String?  // MARKETING, UTILITY, AUTHENTICATION
+  status            String   @default("approved") // approved, pending, rejected
+  components        String?  // JSON of template components (header, body, footer, buttons)
+  variables         String   // JSON array of variable names
+  bodyText          String?  // The template body text with {{1}} placeholders
+  headerType        String?  // none, text, image, video, document
+  headerContent     String?  // header text or media URL/ID
+  footerText        String?  // optional footer text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  campaigns   Campaign[]
+
+  @@unique([name, language])
+}
+
+model Campaign {
+  id                    Int      @id @default(autoincrement())
+  userId                Int
+  name                  String
+  whatsappPhoneNumberId Int
+  templateId            Int?
+  messageType           String   // text, image, video, template
+  messageContent        String?  // raw text or template body
+  mediaId               Int?
+  status                String   @default("draft") // draft, scheduled, running, paused, stopped, completed, failed
+  scheduledAt           DateTime?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  totalRecipients       Int      @default(0)
+  sentCount             Int      @default(0)
+  deliveredCount        Int      @default(0)
+  readCount             Int      @default(0)
+  failedCount           Int      @default(0)
+  templateVariables     String?  // JSON mapping of variable names to contact field names
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  user              User @relation(fields: [userId], references: [id])
+  whatsappPhoneNumber WhatsAppPhoneNumber @relation(fields: [whatsappPhoneNumberId], references: [id])
+  template          Template? @relation(fields: [templateId], references: [id])
+  media             Media?    @relation(fields: [mediaId], references: [id])
+  campaignContacts  CampaignContact[]
+  messages          Message[]
+}
+
+model CampaignContact {
+  id                Int     @id @default(autoincrement())
+  campaignId        Int
+  contactId         Int
+  eligible          Boolean @default(true)
+  ineligibleReason  String? // reason if not eligible
+  snapshotPhone     String? // phone number at time of snapshot
+  snapshotFirstName String?
+  snapshotLastName  String?
+  snapshotEmail     String?
+  status            String  @default("pending") // pending, queued, sent, delivered, read, failed, skipped
+  createdAt         DateTime @default(now())
+
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  contact     Contact  @relation(fields: [contactId], references: [id])
+
+  @@unique([campaignId, contactId])
+}
+
+model Media {
+  id            Int @id @default(autoincrement())
+  userId        Int?
+  filename      String
+  mimeType      String
+  size          Int
+  url           String // local/object storage URL
+  whatsappMediaId String? // Media ID returned by WhatsApp after upload
+  createdAt     DateTime @default(now())
+
+  // Relations
+  campaigns   Campaign[]
+  messages    Message[]
+  incomingMessages IncomingMessage[]
+}
+
+model Message {
+  id                    Int      @id @default(autoincrement())
+  campaignId            Int
+  contactId             Int
+  whatsappPhoneNumberId Int
+  internalMessageId     String   @unique // UUID generated by our system (idempotency key)
+  apiMessageId          String?  // WhatsApp message ID returned by API
+  type                  String   // text, image, video, template
+  content               String?
+  mediaId               Int?
+  status                String   @default("pending") // pending, queued, submitted, delivered, read, failed, skipped
+  errorCode             String?
+  errorMessage          String?
+  errorCategory         String?  // transient, permanent
+  retryCount            Int      @default(0)
+  maxRetries            Int      @default(3)
+  nextRetryAt           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  campaign          Campaign @relation(fields: [campaignId], references: [id])
+  contact           Contact  @relation(fields: [contactId], references: [id])
+  whatsappPhoneNumber WhatsAppPhoneNumber @relation(fields: [whatsappPhoneNumberId], references: [id])
+  media             Media?   @relation(fields: [mediaId], references: [id])
+  events            MessageEvent[]
+}
+
+model MessageEvent {
+  id          Int @id @default(autoincrement())
+  messageId   Int
+  eventType   String // sent, delivered, read, failed
+  timestamp   DateTime @default(now())
+  details     String? // optional JSON with webhook payload
+
+  message     Message @relation(fields: [messageId], references: [id])
+}
+
+model IncomingMessage {
+  id          Int @id @default(autoincrement())
+  contactId   Int
+  whatsappPhoneNumberId Int
+  messageId   String? // WhatsApp API message ID if available
+  type        String // text, image, video, etc.
+  content     String?
+  mediaId     Int?
+  receivedAt  DateTime @default(now())
+
+  // Relations
+  contact     Contact @relation(fields: [contactId], references: [id])
+  whatsappPhoneNumber WhatsAppPhoneNumber @relation(fields: [whatsappPhoneNumberId], references: [id])
+  media       Media?   @relation(fields: [mediaId], references: [id])
+}
+
+model AuditLog {
+  id          Int @id @default(autoincrement())
+  userId      Int
+  action      String
+  entity      String
+  entityId    Int?
+  metadata    String? // JSON string with extra info
+  createdAt   DateTime @default(now())
+
+  user        User @relation(fields: [userId], references: [id])
+}

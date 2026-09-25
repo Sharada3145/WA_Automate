@@ -1,0 +1,7 @@
+phoneNumber,firstName,lastName,email
++919876543210,John,Doe,john@example.com
+9876543210,Jane,Smith,jane@example.com
+invalidphone,Bob,Brown,bob@example.com
++919876543210,Duplicate,User,dup@example.com
++919112233445,InvalidEmail,Test,not-an-email
+,MissingPhone,NoPhone,nophone@example.com
