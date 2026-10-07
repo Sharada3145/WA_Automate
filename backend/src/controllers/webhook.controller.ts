@@ -28,12 +28,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
       if (!rawBody) {
         return res.status(400).send('Missing raw body');
       }
-      
+
       const expectedSignature = `sha256=${crypto
         .createHmac('sha256', env.whatsappAppSecret)
         .update(rawBody)
         .digest('hex')}`;
-        
+
       if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
         console.warn('Webhook signature mismatch');
         return res.sendStatus(403);
@@ -45,6 +45,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
     res.sendStatus(200);
   } catch (error) {
     console.error('Error processing webhook payload:', error);
+    return res.sendStatus(500);
   }
 };
 
